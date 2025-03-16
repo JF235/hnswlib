@@ -114,6 +114,16 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         ef_construction_ = std::max(ef_construction, M_);
         ef_ = 10;
 
+        // Log parameters
+        std::cout << "HierarchicalNSW parameters:" << std::endl;
+        std::cout << "max_elements: " << max_elements_ << std::endl;
+        std::cout << "data_size: " << data_size_ << std::endl;
+        std::cout << "M: " << M_ << std::endl;
+        std::cout << "maxM: " << maxM_ << std::endl;
+        std::cout << "maxM0: " << maxM0_ << std::endl;
+        std::cout << "ef_construction: " << ef_construction_ << std::endl;
+        std::cout << "ef: " << ef_ << "\n\n";
+
         level_generator_.seed(random_seed);
         update_probability_generator_.seed(random_seed + 1);
 
@@ -207,6 +217,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     int getRandomLevel(double reverse_size) {
         std::uniform_real_distribution<double> distribution(0.0, 1.0);
         double r = -log(distribution(level_generator_)) * reverse_size;
+        
+        std::cout << "at level:" << (int) r << std::endl;
         return (int) r;
     }
 
@@ -231,9 +243,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidateSet;
 
+        std::cout << "search from ep:" << ep_id << " at layer:" << layer;
+
         dist_t lowerBound;
         if (!isMarkedDeleted(ep_id)) {
             dist_t dist = fstdistfunc_(data_point, getDataByInternalId(ep_id), dist_func_param_);
+
+            std::cout << " (dist=" << dist << ")" << std::endl;
+
             top_candidates.emplace(dist, ep_id);
             lowerBound = dist;
             candidateSet.emplace(-dist, ep_id);
@@ -246,6 +263,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         while (!candidateSet.empty()) {
             std::pair<dist_t, tableint> curr_el_pair = candidateSet.top();
             if ((-curr_el_pair.first) > lowerBound && top_candidates.size() == ef_construction_) {
+                std::cout << "Candidate dist > lowerBound and top_candidates.size() == ef_construction_" << std::endl;
                 break;
             }
             candidateSet.pop();
@@ -282,24 +300,49 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                 char *currObj1 = (getDataByInternalId(candidate_id));
 
                 dist_t dist1 = fstdistfunc_(data_point, currObj1, dist_func_param_);
+                
+                std::cout << "searching candidate:" << candidate_id << " at layer:" << layer << " (dist=" << dist1 << ")";
+
                 if (top_candidates.size() < ef_construction_ || lowerBound > dist1) {
+                    
+                    std::cout << " (adding to candidateSet)";
                     candidateSet.emplace(-dist1, candidate_id);
 #ifdef USE_SSE
                     _mm_prefetch(getDataByInternalId(candidateSet.top().second), _MM_HINT_T0);
 #endif
 
-                    if (!isMarkedDeleted(candidate_id))
+                    if (!isMarkedDeleted(candidate_id)){
+                        std::cout << " (adding to top_candidates size:" << top_candidates.size() << ")";
                         top_candidates.emplace(dist1, candidate_id);
+                    }
 
-                    if (top_candidates.size() > ef_construction_)
+                    if (top_candidates.size() > ef_construction_) {
+                        std::cout << " (popping extra)";
                         top_candidates.pop();
+                    }
+                        
 
-                    if (!top_candidates.empty())
+                    if (!top_candidates.empty()) {
                         lowerBound = top_candidates.top().first;
+                        std::cout << " (lowerBound=" << lowerBound << ")";
+                    }
+                        
                 }
+
+                std::cout << std::endl;
             }
         }
         visited_list_pool_->releaseVisitedList(vl);
+
+        // Print the candidates, 
+        // Copy
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates_copy = top_candidates;
+        std::cout << "Candidates:";
+        while (!top_candidates_copy.empty()) {
+            std::cout << " " << top_candidates_copy.top().second;
+            top_candidates_copy.pop();
+        }
+        std::cout << std::endl;
 
         return top_candidates;
     }
@@ -444,6 +487,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> &top_candidates,
         const size_t M) {
         if (top_candidates.size() < M) {
+            std::cout << "Connecting all: top_candidates.size() < M" << std::endl;
             return;
         }
 
@@ -455,8 +499,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         }
 
         while (queue_closest.size()) {
-            if (return_list.size() >= M)
-                break;
+                
             std::pair<dist_t, tableint> curent_pair = queue_closest.top();
             dist_t dist_to_query = -curent_pair.first;
             queue_closest.pop();
@@ -468,6 +511,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                                         getDataByInternalId(curent_pair.second),
                                         dist_func_param_);
                 if (curdist < dist_to_query) {
+                    
                     good = false;
                     break;
                 }
@@ -480,6 +524,16 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         for (std::pair<dist_t, tableint> curent_pair : return_list) {
             top_candidates.emplace(-curent_pair.first, curent_pair.second);
         }
+
+        // Print the selected candidates to connect
+        std::cout << "Selected candidates to connect:";
+        // Copy
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates_copy = top_candidates;
+        while (!top_candidates_copy.empty()) {
+            std::cout << " " << top_candidates_copy.top().second;
+            top_candidates_copy.pop();
+        }
+        std::cout << std::endl;
     }
 
 
@@ -1151,6 +1205,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
 
     tableint addPoint(const void *data_point, labeltype label, int level) {
+        
+        std::cout << "Add id:" << label << " ";
+        
         tableint cur_c = 0;
         {
             // Checking if the element with the same label already exists
@@ -1183,11 +1240,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             label_lookup_[label] = cur_c;
         }
 
+        // Random level
         std::unique_lock <std::mutex> lock_el(link_list_locks_[cur_c]);
         int curlevel = getRandomLevel(mult_);
-        if (level > 0)
+        if (level > 0) {
             curlevel = level;
-
+        } 
+        
+        // If level is -1, then the level is randomly generated
         element_levels_[cur_c] = curlevel;
 
         std::unique_lock <std::mutex> templock(global);
@@ -1211,9 +1271,18 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         }
 
         if ((signed)currObj != -1) {
+
+            // Not the first element
             if (curlevel < maxlevelcopy) {
+                // Searching for the closest element in the levels above
+                // my current level.
+
                 dist_t curdist = fstdistfunc_(data_point, getDataByInternalId(currObj), dist_func_param_);
+                
+                std::cout << "current_closest:" << getExternalLabel(currObj) << " dist:" << curdist << std::endl;
+
                 for (int level = maxlevelcopy; level > curlevel; level--) {
+                    std::cout << "level (" << level << ")" << std::endl;
                     bool changed = true;
                     while (changed) {
                         changed = false;
@@ -1228,7 +1297,11 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                             if (cand < 0 || cand > max_elements_)
                                 throw std::runtime_error("cand error");
                             dist_t d = fstdistfunc_(data_point, getDataByInternalId(cand), dist_func_param_);
+                            
+                            std::cout << "dist(" << label << ", " << getExternalLabel(cand) << ") = " << d << "; ";
+
                             if (d < curdist) {
+                                std::cout << "new closest element: " << getExternalLabel(cand) << std::endl;
                                 curdist = d;
                                 currObj = cand;
                                 changed = true;
@@ -1240,6 +1313,11 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
             bool epDeleted = isMarkedDeleted(enterpoint_copy);
             for (int level = std::min(curlevel, maxlevelcopy); level >= 0; level--) {
+                // Searching for the closest element in the levels below
+                // my current level.
+
+                std::cout << "level (" << level << ")" << std::endl;
+
                 if (level > maxlevelcopy || level < 0)  // possible?
                     throw std::runtime_error("Level error");
 
@@ -1256,13 +1334,19 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             // Do nothing for the first element
             enterpoint_node_ = 0;
             maxlevel_ = curlevel;
+
+            std::cout << "First element" << std::endl;
         }
 
         // Releasing lock for the maximum level
         if (curlevel > maxlevelcopy) {
             enterpoint_node_ = cur_c;
             maxlevel_ = curlevel;
+
+            std::cout << "Updating ep:" << enterpoint_node_ << " at level:" << maxlevel_ << std::endl;
         }
+
+        std::cout << std::endl;
         return cur_c;
     }
 
