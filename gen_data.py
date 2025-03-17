@@ -2,6 +2,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import argparse
 
 def generate_random_data(num_points=100, num_dimensions=2):
     """
@@ -31,12 +32,38 @@ def plot_data(data):
     plt.grid(True)
     plt.show()
 
-if __name__ == "__main__":
-    # Generate random data
-    random_data = generate_random_data()
-    
-    # Save random_data to disk
-    np.save('random_data.npy', random_data)
+def gen_table(random_data):
+    # Generate the table with pre-computed L2 distances
+    num_points = random_data.shape[0]
+    table = np.zeros((num_points, num_points))
+    # Compute pairwise distances using broadcasting
+    table = np.sum((random_data[:, np.newaxis, :] - random_data[np.newaxis, :, :])**2, axis=2)
+    return table
 
-    # Plot the generated data
-    plot_data(random_data)
+if __name__ == "__main__":
+
+    # if argument of -g is randomdata generate
+    # else if argument of -g is table  
+    # Generate random data
+
+    parser = argparse.ArgumentParser(description='Generate random data or table.')
+    parser.add_argument('-g', '--generate', type=str, choices=['randomdata', 'table'], required=True,
+                        help='Generate random data or table.')
+    args = parser.parse_args()
+    if args.generate == 'table':
+        
+        random_data = generate_random_data()
+        table = gen_table(random_data)
+        # Save table to disk
+        np.save('table.npy', table)
+
+        print(table)
+    else:
+
+        random_data = generate_random_data()
+        
+        # Save random_data to disk
+        np.save('random_data.npy', random_data)
+
+        # Plot the generated data
+        plot_data(random_data)
