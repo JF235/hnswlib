@@ -4,7 +4,7 @@
 namespace hnswlib {
 
 struct GrMatchParam {
-    int num_points;
+    size_t num_points;
     float *table;
 };
 
@@ -23,12 +23,12 @@ GrMatch(const void *pVect1, const void *pVect2, const void *dist_func_param) {
     // The values i and j are given by the pVect1 and pVect2 pointers.
     // The table is assumed to be in row-major order.
 
-    int i = *((int *) pVect1);
-    int j = *((int *) pVect2);
+    size_t i = *((size_t *) pVect1);
+    size_t j = *((size_t *) pVect2);
 
     GrMatchParam *param = (GrMatchParam *) dist_func_param;
     float *table = param->table;
-    int num_points = param->num_points;
+    size_t num_points = param->num_points;
 
     if (i < 0 || i >= num_points || j < 0 || j >= num_points) {
         // Generate an error if the indices are out of bounds.
@@ -44,7 +44,7 @@ static float
 GrMatchDistance(const void *pVect1, const void *pVect2, const void *dist_func_param) {
     // Turn the griaule match score into a distance score.
     // return 1.0f - GrMatch(pVect1, pVect2, dist_func_param);
-    return GrMatch(pVect1, pVect2, dist_func_param);
+    return 1.0f / (1.0f + GrMatch(pVect1, pVect2, dist_func_param));
 }
 
 class GrMatchSpace : public SpaceInterface<float> {

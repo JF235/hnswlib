@@ -30,6 +30,8 @@ def plot_data(data):
     plt.xlabel('X-axis')
     plt.ylabel('Y-axis')
     plt.grid(True)
+
+    print(data.shape)
     plt.show()
 
 def gen_table(random_data):
@@ -49,15 +51,22 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate random data or table.')
     parser.add_argument('-g', '--generate', type=str, choices=['randomdata', 'table'], required=True,
                         help='Generate random data or table.')
+    parser.add_argument('-n', '--num_points', type=int, default=100,
+                        help='Number of data points to generate.')
+    parser.add_argument('-d', '--num_dimensions', type=int, default=2,
+                        help='Number of dimensions for each data point.')
     args = parser.parse_args()
     if args.generate == 'table':
         
-        random_data = generate_random_data()
+        random_data = generate_random_data(args.num_points, args.num_dimensions)
         table = gen_table(random_data)
+
+        table = table.astype(np.float32)
         # Save table to disk
         np.save('table.npy', table)
 
         print(table)
+        print(table.shape)
     else:
 
         random_data = generate_random_data()
